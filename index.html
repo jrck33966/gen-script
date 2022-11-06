@@ -5,58 +5,870 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>genScript</title>
+    <script type="text/javascript" src="https://unpkg.com/xlsx@0.15.1/dist/xlsx.full.min.js"></script>
+    <style>
+        .grid-container {
+            display: grid;
+            grid-template: 30px auto / 150px 15px;
+            padding-bottom: 10px;
+        }
+
+        .grid-item {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+
 </head>
 
 <body>
-    <button onclick="callHTTP()">call HTTP</button>
-    <button onclick="callHTTPS()">call HTTPS</button>
+
+    <label for="title">select title:</label>
+    <select id="title" style="width: 150px; height: 30px; margin-bottom: 10px" onchange="select(this.selectedIndex);"
+        onfocus="this.selectedIndex = -1;">
+        <option>Nas My Office</option>
+        <option>Add Topic Nas</option>
+        <option>Add Topic Nas Subpath</option>
+        <option>Batch Topic</option>
+        <option>Add User IDS</option>
+        <option>Add Page Authorize</option>
+    </select>
+    <br />
+    <button type="button" style="width: 150px; height: 30px;" onclick="gen()">Gen Script Insert</button>
+    <p id="error" style="color: red; font-size: 20px; font-weight: 500;"></p>
+    <textarea id="input" style="width: 100%; height: 300px;"></textarea>
+    <input id='excel' type='file' onchange='getExcel(event)' hidden />
+    <p id="result" style="font-size: 20px; font-weight: 500;">result : </p>
+    <div class="grid-container">
+        <button class="grid-item" type="button" style="width: 150px; height: 100%;" onclick="copy() ">Copy</button>
+        <p id="checkCopy" class="grid-item" style="color: green;
+             text-align: center;
+             font-size: 15px;
+             font-weight: 1500;">
+        </p>
+    </div>
+    <textarea id="output" style="width: 100%; height: 800px;"></textarea>
+
+    <script>
+        var index = 0;
+        function select(e) {
+            index = e;
+        }
+
+        function gen() {
+            clearScrenn();
+            console.log(this.index)
+            switch (this.index) {
+                case 0:
+                    genNasMyOffice();
+                    break;
+                case 1:
+                    document.getElementById("excel").value = null
+                    document.getElementById("excel").click();
+                    break;
+                case 2:
+                    document.getElementById("excel").value = null
+                    document.getElementById("excel").click();
+                    break;
+                case 3:
+                    genUserRoleBatchMst();
+                    break;
+                case 4:
+                    getUserIDS();
+                    break;
+                case 5:
+                    genUserPageAuthorize();
+                    break;
+
+                default:
+                    document.getElementById("error").innerHTML = "please select title!";
+                    break;
+            }
+        }
+
+        function getExcel(evt) {
+            switch (this.index) {
+                case 1:
+                    genTopicNas(evt);
+                    break;
+                case 2:
+                    genSubpathNas(evt);
+                    break;
+
+            }
+        }
+
+        function genNasMyOffice() {
+            try {
+
+                let value = document.getElementById("input").value
+                let _arr = JSON.parse(value);
+
+
+                let out = '';
+                let _arrData;
+
+                let _strArray = `[
+    $Object
+]`
+                let _strObject = `{
+        "username": "%1",
+        "topic": "%2",
+        "subpath": "%3",
+        "upload": "%4",
+        "download": "%5",
+        
+    }`
+                let format = `var data = $array
+
+ for (item of data) {
+    const cursor = db.getCollection("phxUserRoleNas_Mo").find({
+        username: item.username
+    }).toArray();
+    if (cursor.length == 0) {
+        var _object = {
+            username: item.username,
+            NasTopic: [
+                {
+                    "topic": item.topic,
+                    "subpath": [
+                        {
+                            "namepath": item.subpath,
+                            "auth": {
+                                "upload": item.upload,
+                                "download": item.download,
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+        const res = db.getCollection('phxUserRoleNas_Mo').insert(
+            _object,
+            { ordered: false }
+        )
+    } else {
+        var data = cursor[0];
+        const find = db.getCollection("phxUserRoleNas_Mo").find({
+            username: data.username,
+            'NasTopic.topic': item.topic
+        }).toArray();
+        if (find.length > 0) {
+            for(list of  find[0].NasTopic){
+                var _f = list.subpath.filter(it => it.namepath == item.subpath)
+                if (_f.length > 0) {
+                    const update = db.getCollection('phxUserRoleNas_Mo').updateOne(
+                        { username: item.username },
+                        {
+                            $set: {
+                                "NasTopic.$[i].subpath.$[j].auth.upload": item.upload,
+                                "NasTopic.$[i].subpath.$[j].auth.download": item.download
+                            }
+                        },
+                        {
+                            arrayFilters: [
+                                { "i.topic": item.topic },
+                                { "j.namepath": item.subpath }
+                            ]
+                        }
+                    )
+                } else {
+                    if(list.topic == item.topic){
+                        const update = db.getCollection("phxUserRoleNas_Mo").update(
+                            { username: item.username },
+                            {
+                                $push: {
+                                    "NasTopic.$[i].subpath": {
+                                        "namepath":  item.subpath,
+                                        "auth": {
+                                            "upload": item.upload,
+                                            "download": item.download,
+                                        }
+                                    }
+                                }
+                            },
+                            {
+                                arrayFilters: [
+                                    { "i.topic":  item.topic }
+                                ]
+                            }
+                        );
+                    }
+                }
+                 
+             }
+        } else {
+            const update = db.getCollection("phxUserRoleNas_Mo").update(
+                { username: data.username },
+                {
+                    $push: {
+                        NasTopic: {
+                            "topic": item.topic,
+                            "subpath": [
+                                {
+                                    "namepath": item.subpath,
+                                    "auth": {
+                                        "upload": item.upload,
+                                        "download": item.download,
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            );
+        }
+    }
+}`
+
+                if (_arr instanceof Array) {
+
+                    let _strpustObject = ``
+                    let checkF = true;
+                    for (let item of _arr) {
+                        if (item.username == undefined ||
+                            item.topic == undefined ||
+                            item.subpath == undefined ||
+                            item.upload == undefined ||
+                            item.download == undefined) {
+                            console.log(item)
+                            document.getElementById("error").innerHTML = `Format Incorrect! Ex. {
+"username": "$username",
+"topic": "$topic",
+"subpath": "$subpath",
+"upload": "$upload",
+"download": "$download"
+}`;
+                            document.getElementById("output").value = '';
+                            return;
+                        }
+
+                        if (!checkF) {
+                            _strpustObject += `,`
+                        } else {
+                            checkF = false;
+                        }
+                        let username = item.username.toUpperCase();
+                        let topic = item.topic == undefined ? "" : item.topic
+                        let subpath = item.subpath == undefined ? "" : item.subpath
+                        let upload = item.upload == undefined ? "" : item.upload
+                        let download = item.download == undefined ? "" : item.download
+
+                        var mapObj = [
+                            username,
+                            topic,
+                            subpath,
+                            upload,
+                            download,
+                        ];
+                        let _rDataObject = _strObject.replace(/%(\d+)/g, (_, n) => mapObj[+n - 1])
+                        _strpustObject += _rDataObject;
+                    }
+
+                    let _rDataArray = _strArray.replace('$Object', _strpustObject);
+
+                    out = format.replace('$array', _rDataArray);
+                    document.getElementById("output").value = out;
+
+                } else if (_arr instanceof Object) {
+                    _object = _arr;
+                    if (_object.username == undefined ||
+                        _object.topic == undefined ||
+                        _object.subpath == undefined ||
+                        _object.upload == undefined ||
+                        _object.download == undefined) {
+                        document.getElementById("error").innerHTML = `Format Incorrect! Ex. {
+"username": "$username",
+"topic": "$topic",
+"subpath": "$subpath",
+"upload": "$upload",
+"download": "$download"
+}`;
+                        document.getElementById("output").value = '';
+                        return;
+                    }
+
+                    let username = _object.username
+                    let topic = _object.topic == undefined ? "" : _object.topic
+                    let subpath = _object.subpath == undefined ? "" : _object.subpath
+                    let upload = _object.upload == undefined ? "" : _object.upload
+                    let download = _object.download == undefined ? "" : _object.download
+
+                    var mapObj = [
+                        username,
+                        topic,
+                        subpath,
+                        upload,
+                        download,
+                    ];
+                    let _rDataObject = _strObject.replace(/%(\d+)/g, (_, n) => mapObj[+n - 1])
+                    let _rDataArray = _strArray.replace('$Object', _rDataObject);
+                    out = format.replace('$array', _rDataArray);
+                    document.getElementById("output").value = out;
+                } else {
+                    document.getElementById("error").innerHTML = "Format Incorrect! Ex. [{},{}...{}] ✓ , [{},{}...{},] X";
+                    document.getElementById("output").value = '';
+                    return;
+                }
+
+            }
+            catch (e) {
+                document.getElementById("error").innerHTML = "Format Incorrect! Ex. [{},{}...{}] ✓ , [{},{}...{},] X";
+                document.getElementById("output").value = '';
+            }
+        }
+
+        function genTopicNas(evt) {
+            var files = evt.target.files;
+            var file = files[0];
+            let reader = new FileReader();
+            let format = "$array"
+            let _strArray = `[
+    $Object
+]`
+            let _strObject = `{
+        "lovType": "TOPIC_NAS_MO",
+        "lovName": "%1",
+        "displayVal": "%2",
+        "lovVal1": "%3",
+        "activeFlag": "Y"      
+    }`
+
+            reader.readAsArrayBuffer(file);
+            reader.onload = async (fileReader) => {
+                try {
+                    var data = new Uint8Array(reader.result);
+                    var work_book = XLSX.read(data, { type: 'array' });
+                    var sheet_name = work_book.SheetNames;
+                    var sheet_data = XLSX.utils.sheet_to_json(work_book.Sheets[sheet_name[0]]);
+                    if (sheet_data.length > 0) {
+                        let arr = [];
+                        let _strpustObject = ``
+                        let checkF = true;
+                        try {
+                            for (date of sheet_data) {
+                                let chk = arr.find(item => item.lovName == date.Topic)
+                                if (chk == undefined) {
+                                    if (!checkF) {
+                                        _strpustObject += `,`
+                                    } else {
+                                        checkF = false;
+                                    }
+                                    let lovName = date.Topic
+                                    let displayVal = date.Topic
+                                    let lovVal1 = date["Owner Path*"] == undefined ? '' : date["Owner Path*"]
+
+                                    var mapObj = [
+                                        lovName,
+                                        displayVal,
+                                        lovVal1,
+                                    ];
+
+                                    let _rDataObject = _strObject.replace(/%(\d+)/g, (_, n) => mapObj[+n - 1])
+                                    _strpustObject += _rDataObject;
+
+                                    let ob = JSON.parse(_rDataObject)
+                                    arr.push(ob);
+                                }
+                            }
+                            let _rDataArray = _strArray.replace('$Object', _strpustObject)
+                            document.getElementById("output").value = _rDataArray
+                        }
+                        catch (e) {
+                            console.log(e.message)
+                        }
+
+                    }
+                } catch (e) {
+                    console.log(e.message)
+                }
+            };
+            reader.onerror = function () {
+                console.log(reader.error);
+            };
+        }
+
+        function genSubpathNas(evt) {
+            let _strArray = `[
+    $Object
+]`
+            let _strObject = `{
+        "topic" : "%1",
+        "mainpath" : "%2",
+        "subpath" : [ 
+           "%3"
+        ]
+    }`
+
+            let _strObjectSubpath = `{
+                "path" : "$path"
+            }`
+            var files = evt.target.files;
+            var file = files[0];
+            let reader = new FileReader();
+            reader.readAsArrayBuffer(file);
+            reader.onload = async (fileReader) => {
+                var data = new Uint8Array(reader.result);
+                var work_book = XLSX.read(data, { type: 'array' });
+                var sheet_name = work_book.SheetNames;
+                var sheet_data = XLSX.utils.sheet_to_json(work_book.Sheets[sheet_name[0]]);
+                if (sheet_data.length > 0) {
+                    let arr = []
+                    let out = ``
+                    let checkF = true;
+                    for (date of sheet_data) {
+                        let chk = arr.find(item => item.topic == date.Topic)
+                        if (chk == undefined) {
+                            if (!checkF) {
+                                out += `,\n  \t`
+                            } else {
+                                checkF = false;
+                            }
+                            let topic = date.Topic
+                            let mainpath = date["Main Path*"] == undefined ? '' : date["Main Path*"]
+                            let _f = sheet_data.filter(item => item.Topic == date.Topic && item["Main Path*"] == date["Main Path*"])
+                            let _strpustObject = ``
+                            if (_f.length > 0) {
+                                let checkFsubpath = true;
+                                let arrSubpath = []
+                                for (dataPath of _f) {
+                                    let path = dataPath['Sub Path'] == undefined ? '' : dataPath["Sub Path"]
+                                    let chkSubpath = arrSubpath.find(item => item.subpath == path)
+                                    if (chkSubpath == undefined) {
+                                        if (!checkFsubpath) {
+                                            _strpustObject += `,\n\t`
+                                        } else {
+                                            checkFsubpath = false;
+                                        }
+                                        let _rDataPath = _strObjectSubpath.replace('$path', path)
+                                        _strpustObject += _rDataPath;
+                                        let ob = {
+                                            subpath: path
+                                        }
+                                        arrSubpath.push(ob)
+                                    }
+                                }
+                            }
+
+                            let mapObj = [
+                                topic,
+                                mainpath,
+                                _strpustObject
+                            ];
+
+                            let _rDataObject = _strObject.replace(/%(\d+)/g, (_, n) => mapObj[+n - 1])
+                            _rDataObject = _rDataObject.replace(/"{/g, '{')
+                            _rDataObject = _rDataObject.replace(/}"/g, '}')
+                            out += _rDataObject
+                            let ob = JSON.parse(_rDataObject)
+                            arr.push(ob);
+                            // break
+                        }
+                    }
+                    console.log(arr)
+                    let _rDataArray = _strArray.replace('$Object', out);
+                    document.getElementById("output").value = _rDataArray;
+                }
+            };
+            reader.onerror = function () {
+                console.log(reader.error);
+            };
+        }
+
+        function genUserRoleBatchMst() {
+            try {
+
+                let value = document.getElementById("input").value
+                let _arr = JSON.parse(value);
+
+                let out = '';
+                let _arrData;
+
+                let _strArray = `[
+    $Object
+]`
+                let _strObject = `{
+        "username": "$username",
+        "batchTopic": "$batchTopic"
+    }`
+                let format = `var data = $array
+
+for (var i = 0; i < data.length; i++) {
+    var cursor = db.getCollection("phxUserRoleBatchMst").find({
+        username: data[i].username
+    });
+    if (cursor.length() > 0) {
+        for (item of cursor._arr) {
+            var _fItem = item.batchTopic.filter(it => it.type === data[i].batchTopic)
+            if (_fItem.length == 0) {
+                const res = db.getCollection("phxUserRoleBatchMst").update(
+                    { username: data[i].username },
+                    { $push: { batchTopic: { "type": data[i].batchTopic } } }
+                );
+            }
+        }
+    } else {
+        db.getCollection("phxUserRoleBatchMst").insert(
+            {
+                username: data[i].username,
+                batchTopic: [
+                    { "type": data[i].batchTopic }
+                ]
+            }
+        )
+    }
+}`
+
+                if (_arr instanceof Array) {
+
+                    let _strpustObject = ``
+                    let checkF = true;
+                    for (let item of _arr) {
+                        if (item.batchTopic == undefined || item.username == undefined) {
+                            document.getElementById("error").innerHTML = `Format Incorrect! Ex. {
+"username": "$username",
+"batchTopic": "$batchTopic"
+}`;
+                            document.getElementById("output").value = '';
+                            return;
+                        }
+
+                        if (!checkF) {
+                            _strpustObject += `,`
+
+                        } else {
+                            checkF = false;
+                        }
+                        let _rDataObject = _strObject.replace('$username', item.username);
+                        _rDataObject = _rDataObject.replace('$batchTopic', item.batchTopic);
+                        _strpustObject += _rDataObject;
+                    }
+
+                    let _rDataArray = _strArray.replace('$Object', _strpustObject);
+
+                    out = format.replace('$array', _rDataArray);
+                    document.getElementById("output").value = out;
+
+                } else if (_arr instanceof Object) {
+                    _arrData = _arr;
+                    if (_arrData.batchTopic == undefined || _arrData.username == undefined) {
+                        document.getElementById("error").innerHTML = `Format Incorrect! Ex. {
+"username": "$username",
+"batchTopic": "$batchTopic"
+}`;
+                        document.getElementById("output").value = '';
+                        return;
+                    }
+                    let _rDataObject = _strObject.replace('$username', _arrData.username);
+                    _rDataObject = _rDataObject.replace('$batchTopic', _arrData.batchTopic);
+
+                    let _rDataArray = _strArray.replace('$Object', _rDataObject);
+                    out = format.replace('$array', _rDataArray);
+                    document.getElementById("output").value = out;
+                } else {
+                    document.getElementById("error").innerHTML = "Format Incorrect! Ex. [{},{}...{}] ✓ , [{},{}...{},] X";
+                    document.getElementById("output").value = '';
+                    return;
+                }
+
+            }
+            catch (e) {
+                document.getElementById("error").innerHTML = "Format Incorrect! Ex. [{},{}...{}] ✓ , [{},{}...{},] X";
+                document.getElementById("output").value = '';
+            }
+        }
+
+        function getUserIDS() {
+            try {
+                let value = document.getElementById("input").value
+                let _arr = JSON.parse(value);
+
+                let out = '';
+                let _arrData;
+                let _strArray = `[
+    $Object
+]`
+                let _strObject = `{
+        "username": "%1",
+        "firstName": "%2",
+        "lastName": "%3",
+        "email": "%4",
+        "activeFlg": "%5",
+        "authorize": "admin",
+        "subGroup": "%6",
+        "locationCode": "%7",
+        "locationName": "%8",  
+        "department": "%9",
+    }`
+                let format = `var data = $array
+for (item of data) {
+    var cursor = db.getCollection("userAuthSAML").find({
+        username: item.username
+    });
+    if (cursor.length() == 0) {
+
+        var _object = {
+            username: item.username.toUpperCase(),
+            firstName: item.firstName ,
+            lastName: item.lastName,
+            email: item.email,
+            activeFlg: item.activeFlg,
+            authorize: item.authorize,
+            subGroup: item.subGroup,
+            locationCode: item.locationCode,
+            locationName: item.locationName,
+            department: item.department,
+        }
+
+        const res = db.getCollection('userAuthSAML').insert(
+            _object,
+            { ordered: false }
+        )
+    }
+}`
+
+                if (_arr instanceof Array) {
+                    let _strpustObject = ``
+                    let checkF = true;
+                    for (let [index, item] of _arr.entries()) {
+                        if (item.username == undefined) {
+                            document.getElementById("error").innerHTML = `Error: Username Object ที่ -> ${index} ไม่มีค่า`;
+                            document.getElementById("output").value = '';
+                            return;
+                        }
+
+                        if (!checkF) {
+                            _strpustObject += `,`
+
+                        } else {
+                            checkF = false;
+                        }
+                        let username = item.username
+                        let firstName = item.firstName == undefined ? "" : item.firstName
+                        let lastName = item.lastName == undefined ? "" : item.lastName
+                        let email = item.email == undefined ? "" : item.email
+                        // let activeFlg = item.activeFlg == undefined ? "" : item.activeFlg
+                        let activeFlg = "Y"
+                        let subGroup = item.subGroup == undefined ? "" : item.subGroup
+                        let locationCode = item.locationCode == undefined ? "" : item.locationCode
+                        let locationName = item.locationName == undefined ? "" : item.locationName
+                        let department = item.department == undefined ? "" : item.department
+
+                        var mapObj = [
+                            username,
+                            firstName,
+                            lastName,
+                            email,
+                            activeFlg,
+                            subGroup,
+                            locationCode,
+                            locationName,
+                            department,
+                        ];
+                        let _rDataObject = _strObject.replace(/%(\d+)/g, (_, n) => mapObj[+n - 1])
+                        _strpustObject += _rDataObject;
+                    }
+
+                    let _rDataArray = _strArray.replace('$Object', _strpustObject);
+
+                    out = format.replace('$array', _rDataArray);
+                    document.getElementById("output").value = out;
+                } else if (_arr instanceof Object) {
+                    _object = _arr;
+                    if (_object.username == undefined) {
+                        document.getElementById("error").innerHTML = `Error: Username ไม่มีค่า`;
+                        document.getElementById("output").value = '';
+                        return;
+                    }
+
+                    let username = _object.username
+                    let firstName = _object.firstName == undefined ? "" : _object.firstName
+                    let lastName = _object.lastName == undefined ? "" : _object.lastName
+                    let email = _object.email == undefined ? "" : _object.email
+                    // let activeFlg = _object.activeFlg == undefined ? "" : _object.activeFlg
+                    let activeFlg = "Y"
+                    let subGroup = _object.subGroup == undefined ? "" : _object.subGroup
+                    let locationCode = _object.locationCode == undefined ? "" : _object.locationCode
+                    let locationName = _object.locationName == undefined ? "" : _object.locationName
+                    let department = _object.department == undefined ? "" : _object.department
+                    var mapObj = [
+                        username,
+                        firstName,
+                        lastName,
+                        email,
+                        activeFlg,
+                        subGroup,
+                        locationCode,
+                        locationName,
+                        department,
+                    ];
+                    let _rDataObject = _strObject.replace(/%(\d+)/g, (_, n) => mapObj[+n - 1])
+                    let _rDataArray = _strArray.replace('$Object', _rDataObject);
+                    out = format.replace('$array', _rDataArray);
+                    document.getElementById("output").value = out;
+                } else {
+                    document.getElementById("error").innerHTML = "Format Incorrect! Ex. [{},{}...{}] ✓ , [{},{}...{},] X";
+                    document.getElementById("output").value = '';
+                    return;
+                }
+
+            }
+            catch (e) {
+                document.getElementById("error").innerHTML = "Format Incorrect! Ex. [{},{}...{}] ✓ , [{},{}...{},] X";
+                document.getElementById("output").value = '';
+            }
+        }
+
+        function genUserPageAuthorize() {
+            try {
+
+                let value = document.getElementById("input").value
+                let _arr = JSON.parse(value);
+
+                let out = '';
+                let _arrData;
+
+                let _strArray = `[
+    $Object
+]`
+                let _strObject = `{
+        "username": "$username",
+        "Screen": "$Screen"
+    }`
+                let format = `var data = $array
+
+for (var i = 0; i < data.length; i++) {
+    var cursor = db.getCollection('userPageRedirectConfig').aggregate([
+        { $match: { 'pageInfo.header': data[i].Screen } },
+        {
+            $lookup: {
+                from: "userPageBoxConfig",
+                localField: "pageBoxId",
+                foreignField: "_id",
+                as: "data",
+            },
+
+        },
+        { $unwind: '$data' },
+        { $addFields: { usernameSearch: data[i].username.toUpperCase() } },
+        {
+            $lookup: {
+                from: "userAuthSAML",
+                localField: "usernameSearch",
+                foreignField: "username",
+                as: "userxx",
+
+            },
+        }, { $unwind: '$userxx' },
+        { $project: { _id: 0, username: '$usernameSearch', userAuthSAMLId: '$userxx._id', pageChildId: '$data.pageChildId', pageBoxId: '$pageBoxId', pageRedirectId: '$_id', activeFlg: "Y" } },
+    ]);
+    if (!cursor.hasNext()) { continue }
+    while (cursor.hasNext()) {
+        var _d = cursor.next();
+        var object = {
+            "userAuthSAMLId": _d.userAuthSAMLId,
+            "pageChildId": _d.pageChildId,
+            "pageBoxId": _d.pageBoxId,
+            "pageRedirectId": _d.pageRedirectId,
+            "activeFlg": _d.activeFlg,
+        }
+        const out = db.getCollection('userPageAuthorize').find({
+            userAuthSAMLId: object.userAuthSAMLId,
+            pageChildId: object.pageChildId,
+            pageBoxId: object.pageBoxId,
+            pageRedirectId: object.pageRedirectId,
+            activeFlg: object.activeFlg,
+        })
+        if (out.count() == 0) {
+            const res = db.getCollection('userPageAuthorize').insert(
+                object,
+                { ordered: false }
+            )
+        } 
+    }
+}`
+
+                if (_arr instanceof Array) {
+
+                    let _strpustObject = ``
+                    let checkF = true;
+                    for (let item of _arr) {
+                        if (item.Screen == undefined || item.username == undefined) {
+                            document.getElementById("error").innerHTML = `Format Incorrect! Ex. {
+"username": "$username",
+"Screen": "$Screen"
+}`;
+                            document.getElementById("output").value = '';
+                            return;
+                        }
+
+                        if (!checkF) {
+                            _strpustObject += `,`
+
+                        } else {
+                            checkF = false;
+                        }
+                        let _rDataObject = _strObject.replace('$username', item.username);
+                        _rDataObject = _rDataObject.replace('$Screen', item.Screen);
+                        _strpustObject += _rDataObject;
+                    }
+
+                    let _rDataArray = _strArray.replace('$Object', _strpustObject);
+
+                    out = format.replace('$array', _rDataArray);
+                    document.getElementById("output").value = out;
+
+
+                } else if (_arr instanceof Object) {
+                    _arrData = _arr;
+                    if (_arrData.Screen == undefined || _arrData.username == undefined) {
+                        document.getElementById("error").innerHTML = `Format Incorrect! Ex. {
+"username": "$username",
+"Screen": "$Screen"
+}`;
+                        document.getElementById("output").value = '';
+                        return;
+                    }
+                    let _rDataObject = _strObject.replace('$username', _arrData.username);
+                    _rDataObject = _rDataObject.replace('$Screen', _arrData.Screen);
+
+                    let _rDataArray = _strArray.replace('$Object', _rDataObject);
+                    out = format.replace('$array', _rDataArray);
+                    document.getElementById("output").value = out;
+                } else {
+                    document.getElementById("error").innerHTML = "Format Incorrect! Ex. [{},{}...{}] ✓ , [{},{}...{},] X";
+                    document.getElementById("output").value = '';
+                    return;
+                }
+
+            }
+            catch (e) {
+                document.getElementById("error").innerHTML = "Format Incorrect! Ex. [{},{}...{}] ✓ , [{},{}...{},] X";
+                document.getElementById("output").value = '';
+            }
+        }
+
+        function copy() {
+            var copyText = document.getElementById("output");
+            if (copyText.value != "") {
+                copyText.select();
+                copyText.setSelectionRange(0, 999999);
+                navigator.clipboard.writeText(copyText.value);
+                document.getElementById("checkCopy").innerHTML = "✓";
+            }
+        }
+
+        function clearScrenn() {
+            document.getElementById("error").innerHTML = "";
+            document.getElementById("checkCopy").innerHTML = "";
+            document.getElementById("output").value = "";
+        }
+
+    </script>
+
+
 </body>
-<script>
-
-    function callHTTP() {
-        let data = {
-            username: 'dev',
-            password: 'dev'
-        }
-
-        let fetchData = {
-            method: 'POST',
-            body: JSON.stringify(data),
-            headers: new Headers({
-                'Content-Type': 'application/json; charset=UTF-8'
-            })
-        }
-        fetch('http://ec2-13-212-196-98.ap-southeast-1.compute.amazonaws.com/admin/login/',fetchData)
-            .then((response) => {
-                return response.json();
-            })
-            .then((data) => {
-                console.log(data)
-            })
-    }
-    function callHTTPS() {
-        let data = {
-            username: 'dev',
-            password: 'dev'
-        }
-
-        let fetchData = {
-            method: 'POST',
-            body: JSON.stringify(data),
-            headers: new Headers({
-                'Content-Type': 'application/json; charset=UTF-8'
-            })
-        }
-        fetch('https://ec2-13-212-196-98.ap-southeast-1.compute.amazonaws.com/admin/login/',fetchData)
-            .then((response) => {
-                return response.json();
-            })
-            .then((data) => {
-                console.log(data)
-            })
-    }
-
-</script>
 
 </html>
